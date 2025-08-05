@@ -17,6 +17,12 @@ class BaselineConfig:
     dropout: float = 0.1
     max_seq_len: int = 128
     tie_weights: bool = True
+    # MoE settings
+    moe_enabled: bool = False
+    moe_n_experts: int = 4
+    moe_top_k: int = 1
+    moe_activation: str = "gelu"
+    moe_noisy_gate: bool = False
 
 
 class GPTPositionalEncoding(nn.Module):
@@ -43,29 +49,44 @@ def build_causal_mask(T: int, device) -> torch.Tensor:
 
 
 class TransformerBlock(nn.Module):
-    def __init__(self, d_model: int, n_heads: int, ff_dim: int, dropout: float):
+    def __init__(self, d_model: int, n_heads: int, ff_dim: int, dropout: float, use_moe: bool = False, moe_kwargs: Optional[dict] = None):
         super().__init__()
         self.ln1 = nn.LayerNorm(d_model)
         self.attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout, batch_first=True)
         self.drop1 = nn.Dropout(dropout)
 
         self.ln2 = nn.LayerNorm(d_model)
-        self.mlp = nn.Sequential(
-            nn.Linear(d_model, ff_dim),
-            nn.GELU(),
-            nn.Dropout(dropout),
-            nn.Linear(ff_dim, d_model),
-            nn.Dropout(dropout),
-        )
+
+        if use_moe:
+            from .moe.layer import MoEFFNWrapper, MoEConfig  # lazy import to avoid heavy deps if unused
+
+            moe_cfg = MoEConfig(
+                d_model=d_model,
+                ff_dim=ff_dim,
+                n_experts=moe_kwargs.get("n_experts", 4) if moe_kwargs else 4,
+                k=moe_kwargs.get("top_k", 1) if moe_kwargs else 1,
+                dropout=dropout,
+                activation=moe_kwargs.get("activation", "gelu") if moe_kwargs else "gelu",
+                noisy_gate=moe_kwargs.get("noisy_gate", False) if moe_kwargs else False,
+            )
+            self.ffn = MoEFFNWrapper(moe_cfg)
+        else:
+            self.ffn = nn.Sequential(
+                nn.Linear(d_model, ff_dim),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Linear(ff_dim, d_model),
+                nn.Dropout(dropout),
+            )
 
     def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None, key_padding_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         # Pre-norm
         h = self.ln1(x)
         attn_out, _ = self.attn(h, h, h, attn_mask=attn_mask, key_padding_mask=key_padding_mask, need_weights=False)
         x = x + self.drop1(attn_out)
-        # MLP
+        # FFN or MoE-FFN
         h = self.ln2(x)
-        x = x + self.mlp(h)
+        x = x + self.ffn(h)
         return x
 
 
@@ -75,8 +96,26 @@ class GPTDecoder(nn.Module):
         self.cfg = cfg
         self.tok_emb = nn.Embedding(cfg.vocab_size, cfg.d_model)
         self.pos_enc = GPTPositionalEncoding(cfg.d_model, cfg.max_seq_len)
+
+        moe_kwargs = {
+            "n_experts": cfg.moe_n_experts,
+            "top_k": cfg.moe_top_k,
+            "activation": cfg.moe_activation,
+            "noisy_gate": cfg.moe_noisy_gate,
+        }
+
         self.blocks = nn.ModuleList(
-            [TransformerBlock(cfg.d_model, cfg.n_heads, cfg.ff_dim, cfg.dropout) for _ in range(cfg.n_layers)]
+            [
+                TransformerBlock(
+                    cfg.d_model,
+                    cfg.n_heads,
+                    cfg.ff_dim,
+                    cfg.dropout,
+                    use_moe=cfg.moe_enabled,
+                    moe_kwargs=moe_kwargs,
+                )
+                for _ in range(cfg.n_layers)
+            ]
         )
         self.ln_f = nn.LayerNorm(cfg.d_model)
         self.lm_head = nn.Linear(cfg.d_model, cfg.vocab_size, bias=False)

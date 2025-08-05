@@ -23,23 +23,26 @@ Status legend: [ ] pending  [-] in progress  [x] done
 ## Phase 4: Data Preparation
 - [x] Select and document dataset(s) (AG News; see data/README.md)
 - [x] Implement data download and caching script (scripts/download_ag_news.py)
-- [ ] Implement preprocessing/tokenization pipeline
-- [ ] Create data loaders with batching and sequence packing
-- [x] Smoke test data pipeline performance (scripts/smoke_test_data_pipeline.py)
+- [x] Implement preprocessing/tokenization pipeline (lowercase, GPT-2 tokenizer, max_seq_len=128)
+- [x] Create data loaders with batching and sequence packing (causal LM targets, padding/truncation)
+- [x] Smoke test data pipeline performance (scripts/smoke_test_data_pipeline.py and tests)
 
 ## Phase 5: Baseline Implementation (Dense Transformer Decoder)
-- [-] Implement nano-GPT style Transformer decoder block in PyTorch
-- [ ] Implement model config (d_model, n_layers, n_heads, ff_dim, dropout, vocab_size)
-- [ ] Implement training loop (optimizer, scheduler, mixed precision optional)
-- [ ] Add unit tests for block shapes/forward pass
-- [ ] Run baseline training smoke test and record metrics
+- [x] Implement nano-GPT style Transformer decoder block in PyTorch
+- [x] Implement model config (d_model, n_layers, n_heads, ff_dim, dropout, vocab_size)
+- [x] Implement training loop (optimizer, scheduler, mixed precision optional)
+- [x] Add unit tests for block shapes/forward pass
+- [x] Run baseline training smoke test and record metrics
 
 ## Phase 6: MoE Layer Design and Implementation
-- [ ] Design MoE layer interface (experts, gating, top-k, load-balancing loss)
-- [ ] Implement expert networks (e.g., FFN experts)
-- [ ] Implement gating network with routing and token dispatch
-- [ ] Add load balancing/aux losses and configurables
-- [ ] Optimize routing (batch-wise gather/scatter efficiency)
+- [-] Design MoE layer interface (experts, gating, top-k, load-balancing loss)
+  - Scaffolding in place: src/project_chimera/moe/{experts.py,gating.py,layer.py}
+  - BaselineConfig gained MoE flags (moe_enabled, moe_n_experts, moe_top_k, moe_activation, moe_noisy_gate)
+  - TransformerBlock supports MoE FFN via MoEFFNWrapper behind feature flag
+- [ ] Implement expert networks (e.g., FFN experts) — basic FFNExpert stub exists; extend with init scaling/weight tying options
+- [ ] Implement gating network with routing and token dispatch — current Top-K gating returns indices/weights; add efficient gather/scatter
+- [ ] Add load balancing/aux losses and configurables — implement auxiliary loss and coefficient schedule
+- [ ] Optimize routing (batch-wise gather/scatter efficiency) — replace naive all-expert compute with dispatched compute & capacity
 - [ ] Unit tests for MoE layer (shape checks, expert selection distribution)
 
 ## Phase 7: Integration of MoE into Transformer
