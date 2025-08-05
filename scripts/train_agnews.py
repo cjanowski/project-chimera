@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Dict, Any
@@ -19,6 +20,14 @@ from project_chimera.data.preprocess import (
 from project_chimera.utils.device import device_name, get_device
 from project_chimera.utils.repro import set_seed
 
+# MPS-friendly defaults: disable tokenizers parallelism to avoid fork warnings
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+# Prefer higher matmul precision where supported (has effect on MPS/CPU backends in recent PyTorch)
+try:
+    torch.set_float32_matmul_precision("high")
+except Exception:
+    pass
+
 
 @dataclass
 class ExpConfig:
@@ -33,12 +42,12 @@ class ExpConfig:
     pin_memory: bool = True
     data_root: str = "data/ag_news"
 
-    # Model
+    # Model - Reduced capacity to prevent overfitting
     d_model: int = 256
-    n_layers: int = 4
+    n_layers: int = 2  # Reduced from 4 to 2
     n_heads: int = 4
-    ff_dim: int = 1024
-    dropout: float = 0.1
+    ff_dim: int = 512  # Reduced from 1024 to 512
+    dropout: float = 0.4  # Increased from 0.1 to 0.4
     max_seq_len: int = 128
     tie_weights: bool = True
 
@@ -49,10 +58,10 @@ class ExpConfig:
     moe_activation: str = "gelu"
     moe_noisy_gate: bool = False
 
-    # Optim/training
-    lr: float = 3e-4
-    weight_decay: float = 0.01
-    max_steps: int = 200
+    # Optim/training - Anti-overfitting configuration
+    lr: float = 1e-4  # Reduced from 3e-4 to 1e-4
+    weight_decay: float = 0.1  # Increased from 0.01 to 0.1
+    max_steps: int = 1000  # Increased to allow for early stopping
     log_every: int = 20
     eval_every: int = 100
     grad_clip: float = 1.0
@@ -72,6 +81,10 @@ def build_model_and_loaders(cfg: ExpConfig):
 
     # Tokenizer and loaders
     tok = build_tokenizer(TokCfg(pretrained_name=cfg.model_name, lowercase=cfg.lowercase, max_length=cfg.max_length))
+
+    # On MPS, pin_memory is not supported and produces a warning; force-disable for dataloaders
+    effective_pin_memory = cfg.pin_memory and (device.type != "mps")
+
     train_loader, val_loader = build_dataloaders(
         tok,
         TokCfg(pretrained_name=cfg.model_name, lowercase=cfg.lowercase, max_length=cfg.max_length),
@@ -79,7 +92,7 @@ def build_model_and_loaders(cfg: ExpConfig):
         val_limit=cfg.val_limit,
         batch_size=cfg.batch_size,
         num_workers=cfg.num_workers,
-        pin_memory=cfg.pin_memory,
+        pin_memory=effective_pin_memory,
         data_root=cfg.data_root,
     )
 

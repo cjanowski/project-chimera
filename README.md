@@ -119,8 +119,12 @@ I anticipate that MoE models can match or exceed dense baseline quality at reduc
 9. Reproducibility
 Environment
 - Python 3.10+
-- Install dependencies:
-  - pip install -e .[dev]
+- Quick setup: `python scripts/quick_start.py`
+- Manual install: `pip install -e .[dev]`
+
+Issues and Solutions
+- For common training problems and their fixes, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
+- For commands, scripts, and workflows, see [RUNBOOK.md](RUNBOOK.md)
 
 Data
 - AG News download handled by:

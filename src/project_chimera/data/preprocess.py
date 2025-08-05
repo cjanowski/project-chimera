@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional, Tuple
+import random
+import re
 
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -27,6 +29,10 @@ class TokenizerConfig:
     padding: str = "max_length"  # "max_length" or "longest"
     truncation: bool = True
     add_special_tokens: bool = True
+    # Data augmentation settings
+    augment_data: bool = True
+    augment_prob: float = 0.3  # Probability of applying augmentation
+    max_augmentations_per_text: int = 2  # Maximum number of different augmentations per text
 
 
 def build_tokenizer(cfg: TokenizerConfig):
@@ -35,6 +41,117 @@ def build_tokenizer(cfg: TokenizerConfig):
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
     return tok
+
+
+def apply_text_augmentation(text: str, cfg: TokenizerConfig) -> List[str]:
+    """Apply various text augmentation techniques to increase dataset diversity."""
+    if not cfg.augment_data:
+        return [text]
+    
+    augmented_texts = [text]  # Always include original
+    
+    # Define augmentation functions
+    def synonym_replacement(text: str) -> str:
+        """Simple synonym replacement using common word substitutions."""
+        substitutions = {
+            'good': ['great', 'excellent', 'fine', 'nice'],
+            'bad': ['poor', 'terrible', 'awful', 'horrible'],
+            'big': ['large', 'huge', 'massive', 'enormous'],
+            'small': ['tiny', 'little', 'mini', 'compact'],
+            'fast': ['quick', 'rapid', 'swift', 'speedy'],
+            'slow': ['sluggish', 'gradual', 'leisurely'],
+            'new': ['recent', 'fresh', 'latest', 'novel'],
+            'old': ['ancient', 'vintage', 'aged'],
+            'important': ['crucial', 'vital', 'significant', 'key'],
+            'said': ['stated', 'mentioned', 'noted', 'declared'],
+            'company': ['firm', 'corporation', 'business', 'enterprise'],
+            'people': ['individuals', 'persons', 'citizens', 'folks'],
+            'market': ['marketplace', 'trading', 'economy'],
+            'government': ['administration', 'authority', 'officials'],
+        }
+        
+        words = text.split()
+        new_words = []
+        for word in words:
+            clean_word = re.sub(r'[^\w]', '', word.lower())
+            if clean_word in substitutions and random.random() < 0.3:
+                replacement = random.choice(substitutions[clean_word])
+                # Preserve original case pattern
+                if word[0].isupper():
+                    replacement = replacement.capitalize()
+                new_words.append(word.replace(clean_word, replacement, 1))
+            else:
+                new_words.append(word)
+        return ' '.join(new_words)
+    
+    def word_dropout(text: str, drop_rate: float = 0.1) -> str:
+        """Randomly drop words to create variations."""
+        words = text.split()
+        if len(words) <= 3:  # Don't drop words from very short texts
+            return text
+        
+        keep_words = []
+        for word in words:
+            if random.random() > drop_rate:
+                keep_words.append(word)
+        
+        # Ensure we keep at least half the words
+        if len(keep_words) < len(words) // 2:
+            return text
+        
+        return ' '.join(keep_words)
+    
+    def word_shuffle(text: str, shuffle_rate: float = 0.2) -> str:
+        """Randomly shuffle some words within sentences."""
+        sentences = text.split('.')
+        shuffled_sentences = []
+        
+        for sentence in sentences:
+            words = sentence.strip().split()
+            if len(words) <= 3:
+                shuffled_sentences.append(sentence)
+                continue
+                
+            # Randomly shuffle a portion of words
+            num_to_shuffle = max(1, int(len(words) * shuffle_rate))
+            indices_to_shuffle = random.sample(range(len(words)), min(num_to_shuffle, len(words)))
+            
+            if len(indices_to_shuffle) >= 2:
+                shuffled_indices = indices_to_shuffle.copy()
+                random.shuffle(shuffled_indices)
+                
+                new_words = words.copy()
+                for i, j in zip(indices_to_shuffle, shuffled_indices):
+                    new_words[i] = words[j]
+                
+                shuffled_sentences.append(' '.join(new_words))
+            else:
+                shuffled_sentences.append(sentence)
+        
+        return '.'.join(shuffled_sentences)
+    
+    # Available augmentation techniques
+    augmentation_functions = [
+        lambda t: synonym_replacement(t),
+        lambda t: word_dropout(t, 0.1),
+        lambda t: word_shuffle(t, 0.15),
+    ]
+    
+    # Apply random augmentations
+    num_augmentations = min(cfg.max_augmentations_per_text, len(augmentation_functions))
+    selected_augs = random.sample(augmentation_functions, num_augmentations)
+    
+    for aug_func in selected_augs:
+        if random.random() < cfg.augment_prob:
+            try:
+                augmented = aug_func(text)
+                if augmented != text and len(augmented.strip()) > 10:  # Avoid empty or too short texts
+                    augmented_texts.append(augmented)
+            except Exception:
+                # Skip augmentation if it fails
+                continue
+    
+    return augmented_texts
 
 
 class CausalTextDataset(Dataset):
@@ -69,7 +186,13 @@ class CausalTextDataset(Dataset):
                 t = str(item["text"])
                 if cfg.lowercase:
                     t = t.lower()
-                texts.append(t)
+                
+                # Apply data augmentation only to training split
+                if split == "train" and cfg.augment_data:
+                    augmented_texts = apply_text_augmentation(t, cfg)
+                    texts.extend(augmented_texts)
+                else:
+                    texts.append(t)
         except FileNotFoundError:
             # Fallback tiny samples for tests without requiring downloads
             tiny = [
@@ -82,12 +205,18 @@ class CausalTextDataset(Dataset):
                 "Technology: startup unveils innovative AI-powered tool.",
                 "Health: study links sleep quality with cognitive performance.",
             ]
-            n = len(tiny) if limit is None else min(limit, len(tiny))
-            for i in range(n):
+            base_n = len(tiny) if limit is None else min(limit, len(tiny))
+            for i in range(base_n):
                 t = tiny[i % len(tiny)]
                 if cfg.lowercase:
                     t = t.lower()
-                texts.append(t)
+                
+                # Apply data augmentation to fallback data as well for training
+                if split == "train" and cfg.augment_data:
+                    augmented_texts = apply_text_augmentation(t, cfg)
+                    texts.extend(augmented_texts)
+                else:
+                    texts.append(t)
 
         enc = tokenizer(
             texts,
