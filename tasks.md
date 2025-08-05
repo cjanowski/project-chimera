@@ -53,9 +53,10 @@ Status legend: [ ] pending  [-] in progress  [x] done
 - [x] Author unit tests for MoE dispatch and capacity behavior (routing correctness, shapes, finite loss) — validated via passing test suite
 
 ## Phase 8: Training and Evaluation
-- [-] Prepare dataset artifacts (download/cache AG News parquet via scripts) — dataset download fixed and verified with single-parquet-per-split output
-- [ ] Train MoE model on curated dataset (track losses, aux losses, expert utilization)
+- [x] Prepare dataset artifacts (download/cache AG News parquet via scripts) — dataset download fixed and verified with single-parquet-per-split output
+- [-] Implement/enable training CLI for real dataset runs (dense and MoE) using BaselineTrainer
 - [ ] Train dense baseline with compute-matched settings
+- [ ] Train MoE model on curated dataset (track losses, aux losses, expert utilization)
 - [ ] Evaluate metrics (training loss curves, validation perplexity)
 - [ ] Measure inference speed and memory footprint
 - [ ] Compare MoE vs dense at similar compute/latency
