@@ -1,10 +1,10 @@
 # Project Chimera: Dense vs Mixture-of-Experts (MoE) Transformer Study
 
-Author: Cory Janowski
-Date: 2025-08-05
+- Author: Cory Janowski
+- Date: 2025-08-05
 
 Abstract
-This repository investigates architectural and computational trade-offs between dense Transformer decoders and Mixture-of-Experts (MoE) variants in autoregressive language modeling. We implement a nano-GPT style dense baseline and introduce a modular MoE interface with top-k gating and configurable expert ensembles. Our goals are to: (1) establish a strong, reproducible dense baseline; (2) design an extensible MoE layer with clear interfaces for experts, gating, and routing; (3) evaluate training stability, loss convergence, and performance efficiency; and (4) provide open, testable code for further research on routing quality, auxiliary balancing objectives, and dispatch efficiency. Preliminary results are forthcoming; this document details the methodology and experimental protocol to ensure reproducibility and facilitate future extensions.
+This repository investigates architectural and computational trade-offs between dense Transformer decoders and Mixture-of-Experts (MoE) variants in autoregressive language modeling. We implement a nano-GPT style dense baseline and introduce a modular MoE interface with top-k gating and configurable expert ensembles. My goals are to: (1) establish a strong, reproducible dense baseline; (2) design an extensible MoE layer with clear interfaces for experts, gating, and routing; (3) evaluate training stability, loss convergence, and performance efficiency; and (4) provide open, testable code for further research on routing quality, auxiliary balancing objectives, and dispatch efficiency. Preliminary results are forthcoming; this document details the methodology and experimental protocol to ensure reproducibility and facilitate future extensions.
 
 1. Introduction
 Large-scale language models achieve strong performance but often require prohibitive compute. MoE architectures reduce per-token compute by routing tokens to a small subset of experts, potentially improving throughput and scaling efficiency. However, MoE introduces new challenges: routing stability, load balancing, dispatch overhead, and expert under/over-utilization. This project builds a rigorous experimental backbone to assess when and how MoE outperforms dense models at similar quality or latency.
