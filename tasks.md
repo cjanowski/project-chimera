@@ -54,9 +54,10 @@ Status legend: [ ] pending  [-] in progress  [x] done
 
 ## Phase 8: Training and Evaluation
 - [x] Prepare dataset artifacts (download/cache AG News parquet via scripts) — dataset download fixed and verified with single-parquet-per-split output
-- [-] Implement/enable training CLI for real dataset runs (dense and MoE) using BaselineTrainer
-- [ ] Train dense baseline with compute-matched settings
-- [ ] Train MoE model on curated dataset (track losses, aux losses, expert utilization)
+- [x] Implement/enable training CLI for real dataset runs (dense and MoE) using BaselineTrainer — scripts/train_agnews.py added; writes results JSON under runs/
+- [-] Run short dense and MoE jobs and persist results JSON for analysis — executed phase8_smoke run; results saved at runs/phase8_smoke_dense_and_moe.json
+- [ ] Train dense baseline with compute-matched settings (longer run)
+- [ ] Train MoE model on curated dataset (track losses, aux losses, expert utilization) (longer run)
 - [ ] Evaluate metrics (training loss curves, validation perplexity)
 - [ ] Measure inference speed and memory footprint
 - [ ] Compare MoE vs dense at similar compute/latency
