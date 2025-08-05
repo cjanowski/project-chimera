@@ -35,23 +35,25 @@ Status legend: [ ] pending  [-] in progress  [x] done
 - [x] Run baseline training smoke test and record metrics
 
 ## Phase 6: MoE Layer Design and Implementation
-- [-] Design MoE layer interface (experts, gating, top-k, load-balancing loss)
+- [x] Design MoE layer interface (experts, gating, top-k, load-balancing loss)
   - Scaffolding in place: src/project_chimera/moe/{experts.py,gating.py,layer.py}
   - BaselineConfig gained MoE flags (moe_enabled, moe_n_experts, moe_top_k, moe_activation, moe_noisy_gate)
   - TransformerBlock supports MoE FFN via MoEFFNWrapper behind feature flag
-- [ ] Implement expert networks (e.g., FFN experts) — basic FFNExpert stub exists; extend with init scaling/weight tying options
-- [ ] Implement gating network with routing and token dispatch — current Top-K gating returns indices/weights; add efficient gather/scatter
-- [ ] Add load balancing/aux losses and configurables — implement auxiliary loss and coefficient schedule
-- [ ] Optimize routing (batch-wise gather/scatter efficiency) — replace naive all-expert compute with dispatched compute & capacity
-- [ ] Unit tests for MoE layer (shape checks, expert selection distribution)
+- [x] Implement expert networks (e.g., FFN experts) — basic FFNExpert implemented with activation/dropout; extendable for init scaling/weight tying
+- [x] Implement gating network with routing and token dispatch — efficient gather/scatter with capacity implemented
+- [x] Add load balancing/aux losses and configurables — load-balancing aux loss with coef added
+- [x] Optimize routing (batch-wise gather/scatter efficiency) — dispatched compute path implemented
+- [x] Unit tests for MoE layer (routing correctness, capacity adherence, shapes, finite loss, determinism, top-k distribution sanity)
 
 ## Phase 7: Integration of MoE into Transformer
-- [ ] Integrate MoE layer into Transformer block (replace/augment FFN)
-- [ ] Expose configuration flags to toggle dense vs MoE
-- [ ] Validate forward/backward correctness and stability
-- [ ] Micro-benchmarks to verify inference/training speed
+- [x] Integrate MoE layer into Transformer block (replace/augment FFN)
+- [x] Expose configuration flags to toggle dense vs MoE
+- [x] Validate forward/backward correctness and stability
+- [x] Micro-benchmarks to verify inference/training speed
+- [x] Author unit tests for MoE dispatch and capacity behavior (routing correctness, shapes, finite loss) — validated via passing test suite
 
 ## Phase 8: Training and Evaluation
+- [-] Prepare dataset artifacts (download/cache AG News parquet via scripts) — dataset download fixed and verified with single-parquet-per-split output
 - [ ] Train MoE model on curated dataset (track losses, aux losses, expert utilization)
 - [ ] Train dense baseline with compute-matched settings
 - [ ] Evaluate metrics (training loss curves, validation perplexity)

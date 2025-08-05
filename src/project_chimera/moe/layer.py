@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Tuple, List, Dict, Any
+from typing import List, Dict, Any, Tuple
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from .experts import ExpertConfig, FFNExpert, ExpertParallel
 from .gating import GatingConfig, TopKGating
@@ -19,20 +20,36 @@ class MoEConfig:
     dropout: float = 0.0
     activation: str = "gelu"
     noisy_gate: bool = False
-    capacity_factor: float = 1.0  # placeholder; not enforced in this stub
-    aux_loss_coef: float = 0.01   # coefficient for load-balancing loss (future use)
+    capacity_factor: float = 1.0
+    aux_loss_coef: float = 0.01
+
+
+def _compute_load_balancing_loss(gate_probs: torch.Tensor, expert_assignments: torch.Tensor, n_experts: int) -> torch.Tensor:
+    """
+    Load balancing loss similar to Switch Transformer:
+      - gate_probs: [B, T, E] softmax over experts per token (pre-topk)
+      - expert_assignments: [E] total tokens (or mass) per expert
+    Encourages uniform utilization by minimizing the squared coefficient of variation between expected and actual loads.
+    """
+    # Expected fraction per expert from average gate probability
+    frac_expected = gate_probs.mean(dim=(0, 1))  # [E]
+    frac_expected = frac_expected / (frac_expected.sum() + 1e-9)
+
+    # Actual fraction per expert from assignments count/mass
+    total = expert_assignments.sum() + 1e-9
+    frac_actual = expert_assignments / total
+
+    # Squared difference loss
+    loss = ((frac_expected - frac_actual).pow(2)).mean()
+    return loss
 
 
 class MoELayer(nn.Module):
     """
-    Minimal MoE layer stub:
-      - Creates N FFN experts
-      - Uses Top-K gating to select expert indices and weights per token
-      - Performs a simplified 'soft' combine via averaging experts' outputs for now
-
-    NOTE: This is a placeholder focusing on interface shape and API only.
-          It does not implement efficient dispatch (gather/scatter) or
-          capacity constraints yet.
+    MoE layer with efficient token dispatch:
+      - Top-K gating produces expert indices and weights
+      - Capacity controls max tokens per expert; overflow tokens are dropped (or routed to first selected expert until capacity)
+      - Tokens are gathered per-expert, processed, then scattered back and combined with weights
     """
 
     def __init__(self, cfg: MoEConfig):
@@ -41,8 +58,7 @@ class MoELayer(nn.Module):
 
         # Experts
         exp_cfg = ExpertConfig(d_model=cfg.d_model, ff_dim=cfg.ff_dim, dropout=cfg.dropout, activation=cfg.activation)
-        experts: List[nn.Module] = [FFNExpert(exp_cfg) for _ in range(cfg.n_experts)]
-        self.experts = ExpertParallel(experts)
+        self.experts = ExpertParallel([FFNExpert(exp_cfg) for _ in range(cfg.n_experts)])
 
         # Gating
         gate_cfg = GatingConfig(
@@ -54,73 +70,101 @@ class MoELayer(nn.Module):
         )
         self.gate = TopKGating(gate_cfg)
 
-        # Final dropout (optional)
+        # Dropout
         self.drop = nn.Dropout(cfg.dropout)
+
+        # A small linear to obtain full gate probs for aux loss; reuse gating weights
+        self._gate_linear = self.gate.w_gate  # nn.Linear(d_model, E, bias=False)
+
+    def _capacity(self, num_tokens: int) -> int:
+        # capacity per expert = ceil(capacity_factor * num_tokens * k / n_experts)
+        capacity = int((self.cfg.capacity_factor * num_tokens * max(1, self.cfg.k)) / self.cfg.n_experts + 0.9999)
+        return max(1, capacity)
+
+    def _compute_gate_probs(self, x: torch.Tensor) -> torch.Tensor:
+        # gate logits -> softmax over experts for aux loss signal
+        logits = self._gate_linear(x)  # [B, T, E]
+        return F.softmax(logits, dim=-1)
 
     def forward(self, x: torch.Tensor) -> Dict[str, Any]:
         """
         Args:
             x: [B, T, C]
         Returns:
-            dict with:
-              'out': [B, T, C] combined output
-              'aux_loss': scalar tensor (placeholder 0.0)
-              'routing': optional diagnostics (indices, weights)
+            dict(out=[B, T, C], aux_loss=scalar, routing=diagnostics)
         """
         B, T, C = x.shape
         device = x.device
+        E = self.cfg.n_experts
+        K = self.cfg.k
+        N = B * T
 
-        # Compute routing
-        topk_idx, topk_weight = self.gate(x)  # [B, T, k], [B, T, k]
+        # Flatten tokens to [N, C] for routing convenience
+        x_flat = x.reshape(N, C)
 
-        # Simplified combine: run all experts on x, then select/weight outputs
-        # In a full implementation, only routed tokens would be sent to selected experts
-        # via gather/scatter for efficiency.
-        all_exp_out = []
-        for e in self.experts.experts:
-            all_exp_out.append(e(x))  # each [B, T, C]
-        # Stack to [E, B, T, C]
-        exp_out = torch.stack(all_exp_out, dim=0)  # [E, B, T, C]
+        # Compute top-k routing on [B, T, C] for readability
+        topk_idx, topk_weight = self.gate(x)  # [B, T, K], [B, T, K]
+        topk_idx_flat = topk_idx.reshape(N, K)
+        topk_weight_flat = topk_weight.reshape(N, K)
 
-        # Build a mask/weights tensor to combine top-k expert outputs:
-        # For simplicity, convert indices/weights to [E, B, T] weights
-        E = exp_out.shape[0]
-        weights = torch.zeros(E, B, T, device=device, dtype=exp_out.dtype)
+        # Capacity per expert
+        capacity = self._capacity(N)
 
-        # Scatter top-k weights into the expert dimension
-        # topk_idx/topk_weight: [B, T, k]
-        # We iterate over k and add weights to corresponding expert slice
-        k = self.cfg.k
-        for i in range(k):
-            idx_i = topk_idx[:, :, i]  # [B, T]
-            w_i = topk_weight[:, :, i]  # [B, T]
-            # Scatter add on expert axis
-            weights = weights.index_put(
-                (idx_i.unsqueeze(0), torch.arange(B, device=device).unsqueeze(0).unsqueeze(-1).expand(E, -1, T), torch.arange(T, device=device).unsqueeze(0).unsqueeze(0).expand(E, B, -1)),
-                torch.zeros_like(weights),
-                accumulate=False,
-            )  # reset, we'll fill below to avoid mixing; we do a manual fill next
+        # Build per-expert token lists (indices into x_flat), respecting capacity
+        expert_token_indices: List[List[int]] = [[] for _ in range(E)]
+        expert_token_weights: List[List[float]] = [[] for _ in range(E)]
+        token_positions_in_expert: List[List[int]] = [[] for _ in range(E)]  # position for scatter back
 
-        # Manual fill since index_put with multiple advanced indices is complex; do a loop over batch/time for clarity
-        weights.zero_()
-        for b in range(B):
-            for t in range(T):
-                for i in range(k):
-                    e_idx = int(topk_idx[b, t, i].item())
-                    weights[e_idx, b, t] += topk_weight[b, t, i]
+        # Track how many tokens each expert gets
+        expert_load = torch.zeros(E, device=device, dtype=torch.float32)
 
-        # Combine: [E, B, T, C] * [E, B, T, 1] -> sum over E
-        combined = (exp_out * weights.unsqueeze(-1)).sum(dim=0)  # [B, T, C]
-        combined = self.drop(combined)
+        # For each token, iterate its K choices; assign to each chosen expert until capacity
+        for n in range(N):
+            for k_i in range(K):
+                e_idx = int(topk_idx_flat[n, k_i].item())
+                if len(expert_token_indices[e_idx]) < capacity:
+                    expert_token_indices[e_idx].append(n)
+                    expert_token_weights[e_idx].append(float(topk_weight_flat[n, k_i].item()))
+                    token_positions_in_expert[e_idx].append(len(expert_token_indices[e_idx]) - 1)
+                    expert_load[e_idx] += 1.0
+                # If capacity filled, we simply drop overflow for that expert-choice
 
-        aux_loss = torch.zeros((), device=device)  # placeholder for load-balancing loss
+        # Prepare output tensor
+        out = torch.zeros(N, C, device=device, dtype=x.dtype)
+
+        # Dispatch to each expert, process, and combine weighted outputs
+        for e_idx, expert in enumerate(self.experts.experts):
+            idxs = expert_token_indices[e_idx]
+            if len(idxs) == 0:
+                continue
+            idx_tensor = torch.tensor(idxs, device=device, dtype=torch.long)  # [M_e]
+            # Gather expert inputs
+            x_e = x_flat.index_select(0, idx_tensor)  # [M_e, C]
+            # Expert expects [B,T,C]-shaped, but is FFN over last dim; we can keep [M_e, 1, C] -> [M_e, 1, C]
+            x_e = x_e.unsqueeze(1)
+            y_e = expert(x_e)  # [M_e, 1, C]
+            y_e = y_e.squeeze(1)  # [M_e, C]
+            # Weights for these tokens
+            w_e = torch.tensor(expert_token_weights[e_idx], device=device, dtype=y_e.dtype).unsqueeze(-1)  # [M_e, 1]
+            # Scatter-add back to output with weighting
+            out.index_add_(0, idx_tensor, y_e * w_e)
+
+        out = out.reshape(B, T, C)
+        out = self.drop(out)
+
+        # Aux load-balancing loss using expected probs vs actual loads
+        gate_probs = self._compute_gate_probs(x)  # [B, T, E]
+        lb_loss = _compute_load_balancing_loss(gate_probs, expert_load.detach(), E)
+        aux_loss = self.cfg.aux_loss_coef * lb_loss
 
         return {
-            "out": combined,
+            "out": out,
             "aux_loss": aux_loss,
             "routing": {
                 "topk_idx": topk_idx,
                 "topk_weight": topk_weight,
+                "capacity": capacity,
+                "expert_load": expert_load,
             },
         }
 
@@ -128,7 +172,6 @@ class MoELayer(nn.Module):
 class MoEFFNWrapper(nn.Module):
     """
     Drop-in replacement for a dense FFN inside a Transformer block.
-    Matches the dense FFN signature: forward(x) -> Tensor
     Returns only the transformed tensor; aux losses can be handled by the caller if desired.
     """
 

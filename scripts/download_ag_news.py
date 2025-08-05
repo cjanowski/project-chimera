@@ -82,7 +82,9 @@ def to_parquet_shards(ds_dict: "DatasetDict", out_dir: Path, num_shards: int = 8
         ds = ds.remove_columns([c for c in ds.column_names if c not in keep_cols])
 
         # Save to parquet shards
-        ds.to_parquet(path=str(split_dir / f"{split_name}.parquet"), num_shards=num_shards)
+        # datasets' to_parquet does not support 'num_shards' in this environment.
+        # Write a single parquet file per split for compatibility.
+        ds.to_parquet(path_or_buf=str(split_dir / f"{split_name}.parquet"))
 
 
 def main(force: bool = False, shards: int = 8, subset_size: Optional[int] = None) -> None:
@@ -119,14 +121,16 @@ def main(force: bool = False, shards: int = 8, subset_size: Optional[int] = None
             ds[name] = ds[name].select(range(min(subset_size, len(ds[name]))))
 
     print("Writing parquet shards ...")
-    to_parquet_shards(ds, DATA_DIR, num_shards=shards)
+    # Note: current environment writes a single parquet per split for compatibility.
+    # The 'shards' argument is accepted but not used.
+    to_parquet_shards(ds, DATA_DIR, num_shards=1)
     print(f"Done. Files saved under: {DATA_DIR}")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--force", action="store_true", help="Re-download and overwrite existing cache")
-    parser.add_argument("--shards", type=int, default=8, help="Number of parquet shards per split")
+    parser.add_argument("--shards", type=int, default=1, help="Number of parquet shards per split (currently writes single file for compatibility)")
     parser.add_argument("--subset", type=int, default=None, help="Optional subset size per split for quick smoke tests")
     args = parser.parse_args()
     main(force=args.force, shards=args.shards, subset_size=args.subset)
