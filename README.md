@@ -4,7 +4,7 @@
 - Date: 2025-08-05
 
 Abstract
-This repository investigates architectural and computational trade-offs between dense Transformer decoders and Mixture-of-Experts (MoE) variants in autoregressive language modeling. We implement a nano-GPT style dense baseline and introduce a modular MoE interface with top-k gating and configurable expert ensembles. My goals are to: (1) establish a strong, reproducible dense baseline; (2) design an extensible MoE layer with clear interfaces for experts, gating, and routing; (3) evaluate training stability, loss convergence, and performance efficiency; and (4) provide open, testable code for further research on routing quality, auxiliary balancing objectives, and dispatch efficiency. Preliminary results are forthcoming; this document details the methodology and experimental protocol to ensure reproducibility and facilitate future extensions.
+This repository investigates architectural and computational trade-offs between dense Transformer decoders and Mixture-of-Experts (MoE) variants in autoregressive language modeling. Project-Chimera implements a nano-GPT style dense baseline and introduce a modular MoE interface with top-k gating and configurable expert ensembles. My goals are to: (1) establish a strong, reproducible dense baseline; (2) design an extensible MoE layer with clear interfaces for experts, gating, and routing; (3) evaluate training stability, loss convergence, and performance efficiency; and (4) provide open, testable code for further research on routing quality, auxiliary balancing objectives, and dispatch efficiency. Preliminary results are forthcoming; this document details the methodology and experimental protocol to ensure reproducibility and facilitate future extensions.
 
 1. Introduction
 Large-scale language models achieve strong performance but often require prohibitive compute. MoE architectures reduce per-token compute by routing tokens to a small subset of experts, potentially improving throughput and scaling efficiency. However, MoE introduces new challenges: routing stability, load balancing, dispatch overhead, and expert under/over-utilization. This project builds a rigorous experimental backbone to assess when and how MoE outperforms dense models at similar quality or latency.
@@ -29,7 +29,7 @@ References placeholders:
 
 3. Methods
 3.1 Dense Baseline
-We implement a GPT-style Transformer decoder with:
+Project-Chimera implements a GPT-style Transformer decoder with:
 - Token embeddings with weight tying to the output head.
 - Sine/cos positional encoding.
 - Pre-norm residual blocks comprising MultiheadAttention and MLP FFN.
@@ -95,13 +95,13 @@ Primary: AG News (subset) as a compact, well-known dataset to validate end-to-en
 - Dispatch efficiency via gather/scatter vs naive all-expert compute.
 
 5. Results
-Placeholder: Results will include dense baseline curves, MoE comparisons at compute-matched settings, and routing diagnostics. We will report:
+Placeholder: Results will include dense baseline curves, MoE comparisons at compute-matched settings, and routing diagnostics. I will report:
 - Training and validation loss curves with confidence intervals (multiple seeds).
 - Expert utilization histograms; load balancing metrics.
 - Throughput and memory measurements across configurations.
 
 6. Discussion
-We anticipate that MoE models can match or exceed dense baseline quality at reduced per-token compute, but only with careful routing and load balancing. The naive soft-combine implementation serves as a correctness oracle but is inefficient. The central question is identifying the regimes (dataset size, model capacity, routing k) where MoE’s sparsity yields practical benefits without sacrificing convergence stability.
+I anticipate that MoE models can match or exceed dense baseline quality at reduced per-token compute, but only with careful routing and load balancing. The naive soft-combine implementation serves as a correctness oracle but is inefficient. The central question is identifying the regimes (dataset size, model capacity, routing k) where MoE’s sparsity yields practical benefits without sacrificing convergence stability.
 
 7. Limitations
 - Current MoE layer computes all experts, then combines by top-k weights — not efficient and intended as a functional baseline.
