@@ -149,7 +149,7 @@ Testing
 - Tests include data pipeline smoke checks and model forward shape/finite loss tests.
 
 10. References
-- Placeholders for formal citations; recommended to add BibTeX entries for Switch Transformer, GShard, and subsequent MoE routing works when preparing manuscripts.
+- Add BibTeX entries for Switch Transformer, GShard, and subsequent MoE routing works when preparing manuscripts.
 
 Appendix
 A. Code Structure
@@ -162,7 +162,7 @@ A. Code Structure
 - tests/: Unit tests
 
 B. License
-- See pyproject.toml for project metadata. Add a proper open-source license before public release.
+- MIT
 
 C. Acknowledgements
 - This work builds on the open community’s progress in dense and sparse Transformer research. Thanks to maintainers of PyTorch and HuggingFace ecosystems.
