@@ -1,0 +1,80 @@
+# Project Chimera – Task List
+
+Status legend: [ ] pending  [-] in progress  [x] done
+
+## Phase 1: Research and Planning
+- [x] Compile literature review on MoE (Mixtral, Switch Transformer, GShard, recent routing methods)
+- [x] Summarize routing mechanisms and trade-offs (top-k, load balancing, auxiliary losses)
+- [x] Draft synthesis: key differences vs dense transformers
+- [x] Prepare presentation of findings for team review
+
+## Phase 2: Scope, Metrics, and Planning Artifacts
+- [x] Finalize success metrics (training loss target vs dense baseline, inference throughput/latency)
+- [x] Validate/adjust project scope against research takeaways
+- [x] Define evaluation protocol (datasets, splits, metrics, logging)
+
+## Phase 3: Environment Setup
+- [x] Set up Python environment with PyTorch and dependencies (CUDA support)
+- [x] Verify GPU availability and configure device selection
+- [x] Establish project skeleton (src/, tests/, notebooks/, scripts/, data/README.md)
+- [x] Configure reproducibility (seeds, deterministic flags as feasible)
+- [x] Add basic CI to run unit tests and linting
+
+## Phase 4: Data Preparation
+- [x] Select and document dataset(s) (AG News; see data/README.md)
+- [x] Implement data download and caching script (scripts/download_ag_news.py)
+- [ ] Implement preprocessing/tokenization pipeline
+- [ ] Create data loaders with batching and sequence packing
+- [x] Smoke test data pipeline performance (scripts/smoke_test_data_pipeline.py)
+
+## Phase 5: Baseline Implementation (Dense Transformer Decoder)
+- [-] Implement nano-GPT style Transformer decoder block in PyTorch
+- [ ] Implement model config (d_model, n_layers, n_heads, ff_dim, dropout, vocab_size)
+- [ ] Implement training loop (optimizer, scheduler, mixed precision optional)
+- [ ] Add unit tests for block shapes/forward pass
+- [ ] Run baseline training smoke test and record metrics
+
+## Phase 6: MoE Layer Design and Implementation
+- [ ] Design MoE layer interface (experts, gating, top-k, load-balancing loss)
+- [ ] Implement expert networks (e.g., FFN experts)
+- [ ] Implement gating network with routing and token dispatch
+- [ ] Add load balancing/aux losses and configurables
+- [ ] Optimize routing (batch-wise gather/scatter efficiency)
+- [ ] Unit tests for MoE layer (shape checks, expert selection distribution)
+
+## Phase 7: Integration of MoE into Transformer
+- [ ] Integrate MoE layer into Transformer block (replace/augment FFN)
+- [ ] Expose configuration flags to toggle dense vs MoE
+- [ ] Validate forward/backward correctness and stability
+- [ ] Micro-benchmarks to verify inference/training speed
+
+## Phase 8: Training and Evaluation
+- [ ] Train MoE model on curated dataset (track losses, aux losses, expert utilization)
+- [ ] Train dense baseline with compute-matched settings
+- [ ] Evaluate metrics (training loss curves, validation perplexity)
+- [ ] Measure inference speed and memory footprint
+- [ ] Compare MoE vs dense at similar compute/latency
+
+## Phase 9: Analysis and Reporting
+- [ ] Analyze results (loss, speed, utilization, load balancing effectiveness)
+- [ ] Create visualizations (training curves, routing histograms, throughput)
+- [ ] Draft final report (methods, experiments, results, discussion, future work)
+- [ ] Prepare presentation deck summarizing findings
+
+## Phase 10: Documentation and Packaging
+- [x] Write README with quickstart, configs, and commands
+- [ ] API docs for core modules (Transformer block, MoE layer, gating)
+- [ ] Example configs for dense and MoE runs
+- [ ] Reproducibility checklist and seed/results table
+
+## Future Work and Extensions
+- [ ] Explore advanced routing (noisy top-k, Sinkhorn/soft routing, task-aware)
+- [ ] Evaluate expert parallelism strategies (sharding, FSDP/DeepSpeed integration)
+- [ ] Scale experiments (larger datasets, deeper/wider models)
+- [ ] Draft publication/presentation outline from report
+
+## Administrative/Project Hygiene
+- [ ] Define experiment tracking (e.g., WandB/MLflow) and naming conventions
+- [ ] Set up automated checkpoints and best-model selection
+- [x] Establish coding standards and pre-commit hooks (.pre-commit-config.yaml)
+- [ ] Maintain CHANGELOG and version tags for key milestones
