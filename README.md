@@ -149,7 +149,14 @@ Testing
 - Tests include data pipeline smoke checks and model forward shape/finite loss tests.
 
 10. References
-- Add BibTeX entries for Switch Transformer, GShard, and subsequent MoE routing works when preparing manuscripts.
+
+Key references for MoE and scaling:
+
+- Fedus, W., Zoph, B., & Shazeer, N. (2021). Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efficient Sparsity. ICML. arXiv:2101.03961. https://arxiv.org/abs/2101.03961
+- Lepikhin, D., Lee, H., Xu, Y., Chen, D., Firat, O., Huang, Y., Krikun, M., Shazeer, N., & Chen, Z. (2021). GShard: Scaling Giant Models with Conditional Computation and Automatic Sharding. ICLR. arXiv:2006.16668. https://arxiv.org/abs/2006.16668
+- Shazeer, N., Mirhoseini, A., Maziarz, K., Davis, A., Le, Q. V., Hinton, G. E., & Dean, J. (2017). Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer. ICLR. arXiv:1701.06538. https://arxiv.org/abs/1701.06538
+- Rajbhandari, S., Li, C., Yao, Z., Zhang, M., Ruwase, O., Rasley, J., Zhang, S., & He, Y. (2022). DeepSpeed-MoE: Advancing Mixture-of-Experts Inference and Training to Power Next-Generation AI Scale. arXiv:2201.05596. https://arxiv.org/abs/2201.05596
+- Zhou, D., Hu, H., Pfister, T., & Soricut, R. (2022). Mixture-of-Experts with Expert Choice Routing. NeurIPS. arXiv:2202.09368. https://arxiv.org/abs/2202.09368
 
 Appendix
 A. Code Structure
